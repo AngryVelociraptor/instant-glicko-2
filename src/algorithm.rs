@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime};
 
 use crate::{
     constants, ConvertToScale, FromWithSettings, GlickoSettings, Internal, InternalRating,
-    IntoWithSettings, Public, Rating, RatingScale,
+    IntoWithSettings, Public, PublicRating, Rating, RatingScale,
 };
 
 #[cfg(feature = "serde")]
@@ -517,6 +517,51 @@ pub fn rate_games(
             new_rating.volatility(),
         ),
     )
+}
+
+/// Calculates the new player rating after the given games using the Glicko-2 algorithm.
+///
+/// This wrapper around `rate_games_untimed` handles conversion between public and internal rating scales.
+/// The function takes ratings and games in the public scale, converts them to the internal scale
+/// for calculation, and then converts the result back to the public scale.
+///
+/// # Parameters
+///
+/// * `player_rating` - The current public rating of the player
+/// * `results` - A slice of public games played by the player
+/// * `elapsed_periods` - The number of rating periods that have elapsed since the player's last update
+/// * `settings` - The Glicko-2 configuration settings
+///
+/// # Returns
+///
+/// The new public rating of the player after considering the games and elapsed time
+///
+/// # Panics
+///
+/// This function panics if `elapsed_periods` is negative.
+///
+/// It can also panic if `settings.convergence_tolerance()` is unreasonably low.
+pub fn rate_public_games(
+    player_rating: PublicRating,
+    results: &[PublicGame],
+    elapsed_periods: f64,
+    settings: GlickoSettings,
+) -> PublicRating {
+    let internal_rating = player_rating.into_with_settings(settings);
+
+    let internal_results: Vec<_> = results
+        .iter()
+        .map(|game| (*game).into_with_settings(settings))
+        .collect();
+
+    let new_internal_rating = rate_games_untimed(
+        internal_rating,
+        &internal_results,
+        elapsed_periods,
+        settings,
+    );
+
+    PublicRating::from_with_settings(new_internal_rating, settings)
 }
 
 /// Calculates the new internal player rating after the given [`InternalGame`]s were played
